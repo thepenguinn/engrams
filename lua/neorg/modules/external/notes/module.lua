@@ -1,4 +1,5 @@
 local neorg = require('neorg.core')
+local Path = require('plenary.path')
 
 local module = neorg.modules.create('external.notes')
 
@@ -8,9 +9,10 @@ module.setup = function()
         success = true,
         requires = {
             -- "core.keybinds",
-            -- "core.integrations.treesitter",
+            "core.integrations.treesitter",
             "core.ui",
             -- "core.dirman.utils",
+			"core.export",
 			"core.neorgcmd",
         },
     }
@@ -26,7 +28,9 @@ module.config.public = {
 					"notes",
 				},
 			},
-			grouping = {},
+			grouping = {
+				[1] = { "<all>" }
+			},
 		},
 	},
 
@@ -35,16 +39,170 @@ module.config.public = {
 }
 
 module.load = function ()
-	-- module.required["core.neorgcmd"].add_commands_from_table({
+	module.required["core.neorgcmd"].add_commands_from_table({
 
-	-- })
+		dossier = {
+
+			args = 0,
+			condition = "norg",
+			name = "dossier"
+
+		},
+
+
+	})
 
 end
 
 
+module.config.private = {
+
+	grouped = {
+		["ssl"] = {
+			["ssl Syllabus"] = {
+				"mod-1/syllabus.norg",
+				"mod-2/syllabus.norg",
+			},
+
+			["ssl mod-1 Notes"] = {
+				"mod-1/notes.norg",
+			},
+
+			["ssl mod-2 Notes"] = {
+				"mod-2/notes.norg",
+			},
+		},
+		["hai"] = {
+			["hai Syllabus"] = {
+				"mod-1/syllabus.norg",
+				"mod-2/syllabus.norg",
+			},
+
+			["hai mod-1 Notes"] = {
+				"mod-1/notes.norg",
+			},
+
+			["hai mod-2 Notes"] = {
+				"mod-2/notes.norg",
+			},
+		},
+	},
+
+}
+
+
+
 module.public = {
 
+	--- @param dossier_root string # path to the directory
+	--- @return table? # reads the json inside
+	--- dossier_root/exported/export_info.json and returns it as a table if it
+	--- doesn't exist returns nil
+	get_prev_export_info = function(dossier_root)
+		local obj = Path:new(dossier_root .. "/exported/export_info.json")
+
+		if not obj:is_file() then
+			return nil
+		end
+
+		return vim.json.decode(
+			obj:read()
+		)
+	end,
+
+	gen_markdown = function()
+
+
+		local file_name = "exported.md"
+		local export_path = vim.loop.cwd() .. "/" .. file_name
+		local exported_text = module.required["core.export"].export(0, "markdown")
+
+
+		Path:new(export_path):write(exported_text, "w")
+
+		print("current buf has been exported to " .. export_path)
+
+	end,
+
+
+	read_config = function()
+
+		-- local tbl = {
+		-- 	hai = "haiin",
+		-- 	sih = "haiin",
+		-- 	lod = "haiin",
+		-- 	fdre = "haiin",
+		-- 	hal = "haiin",
+		-- 	haill = "haiin",
+		-- 	haill = {
+
+		-- 		anoth = {
+		-- 			"whid",
+		-- 			"lo",
+		-- 		},
+
+		-- 		ifir = {
+
+		-- 			"ifwhid",
+		-- 			"iflo",
+		-- 		},
+
+		-- 	},
+		-- }
+
+		local config_path = vim.loop.cwd() .. "/thisis.json"
+		print(config_path)
+		-- Path:new(config_path):write(vim.json.encode(tbl), "w")
+		print(vim.inspect(
+			vim.json.decode(Path:new(config_path):read())
+		))
+
+	end,
+
+
+	first = function()
+
+		local ts_utils = module.required["core.integrations.treesitter"].get_ts_utils()
+
+		module.config.private.nodes = ts_utils.get_node_at_cursor(0)
+
+	end,
+
 	ok = function()
+
+		local tree = {}
+
+		local ts_utils = module.required["core.integrations.treesitter"].get_ts_utils()
+
+		local node = ts_utils.get_node_at_cursor(0)
+		print(vim.inspect(
+			ts_utils
+			-- vim.treesitter.get_node_text(node, 0)
+			-- ts_utils.swap_nodes(module.config.private.nodes, node, 0)
+		))
+
+		-- for path in vim.fs.dir(vim.loop.cwd(), {depth = math.huge})
+		-- 	do
+		-- 	if vim.fn.isdirectory(path) ~= 0 then
+		-- 		-- if tree[path]
+		-- 		print(path)
+		-- 	end
+
+		-- end
+
+		-- Get all the files in the cwd --
+
+		-- local scan = require'plenary.scandir'
+		-- print(vim.inspect(scan.scan_dir('.', {
+		-- 	hidden = true,
+		-- 	add_dirs = true,
+		-- 	depth = math.huge
+		-- 	}
+		-- )))
+
+	end,
+
+	ooo = function()
 
 		for key, val in pairs(module.config.public.dossiers.structure)
 			do
@@ -145,5 +303,25 @@ module.public = {
 
 
 }
+
+module.on_event = function(event)
+
+	if event.type == "core.neorgcmd.events.dossier" then
+		-- print(vim.inspect(event))
+		print(vim.inspect(
+			module.public.get_prev_export_info(vim.loop.cwd())
+		))
+	end
+
+end
+
+
+
+module.events.subscribed = {
+    ["core.neorgcmd"] = {
+        ["dossier"] = true,
+    },
+}
+
 
 return module
