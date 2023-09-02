@@ -2,6 +2,7 @@ local neorg = require('neorg.core')
 local Path = require('plenary.path')
 
 local module = neorg.modules.create('external.notes')
+local utils = neorg.utils
 
 
 module.setup = function()
@@ -19,11 +20,10 @@ module.setup = function()
 end
 
 module.config.public = {
-
 	dossiers = {
 		default = {
 			structure = {
-				["mod-%d"] = {
+				["mod-<%d>"] = {
 					"syllabus",
 					"notes",
 				},
@@ -33,9 +33,6 @@ module.config.public = {
 			},
 		},
 	},
-
-
-
 }
 
 module.load = function ()
@@ -44,7 +41,7 @@ module.load = function ()
 		dossier = {
 
 			args = 0,
-			condition = "norg",
+			-- condition = "norg",
 			name = "dossier"
 
 		},
@@ -57,33 +54,59 @@ end
 
 module.config.private = {
 
+	loaded_files = {},
+
 	grouped = {
 		["ssl"] = {
-			["ssl Syllabus"] = {
-				"mod-1/syllabus.norg",
-				"mod-2/syllabus.norg",
+			{
+				-- if any of these values are nil then we will try to
+				-- reads it from the first file's meta, if that is also nil,
+				-- it will be the string "nil"
+				title = nil,
+				description = nil,
+				authors = {},
+				categories = {},
+				created = nil,
+				updated = nil,
+				file_name = nil,
+				files = {
+					"mod-1/syllabus.norg",
+					"mod-2/syllabus.norg",
+				},
 			},
-
-			["ssl mod-1 Notes"] = {
-				"mod-1/notes.norg",
+			{
+				title = nil,
+				files = {
+					"mod-1/notes.norg",
+				},
 			},
-
-			["ssl mod-2 Notes"] = {
-				"mod-2/notes.norg",
+			{
+				title = nil,
+				files = {
+					"mod-2/notes.norg",
+				},
 			},
 		},
+
 		["hai"] = {
-			["hai Syllabus"] = {
-				"mod-1/syllabus.norg",
-				"mod-2/syllabus.norg",
+			{
+				title = nil,
+				files = {
+					"mod-1/syllabus.norg",
+					"mod-2/syllabus.norg",
+				},
 			},
-
-			["hai mod-1 Notes"] = {
-				"mod-1/notes.norg",
+			{
+				title = nil,
+				files = {
+					"mod-1/notes.norg",
+				},
 			},
-
-			["hai mod-2 Notes"] = {
-				"mod-2/notes.norg",
+			{
+				title = nil,
+				files = {
+					"mod-2/notes.norg",
+				},
 			},
 		},
 	},
@@ -91,8 +114,188 @@ module.config.private = {
 }
 
 
+module.private = {
+
+	--- @param file # path of the file
+	--- @return number? # bufnr of the loaded file
+	get_buf = function(file)
+
+		if module.config.private.loaded_files[file].bufnr then
+			return module.config.private.loaded_files[file].bufnr
+		end
+
+		local file_obj = Path:new(file)
+
+		if not file_obj:is_file() then
+			return nil
+		end
+
+		local bufnr = vim.api.nvim_create_buf(false, true)
+
+		local str = file_obj:read()
+		local tbl = {}
+
+		for line in str:gmatch("[^\n]+") do
+			tbl[#tbl + 1] = line
+		end
+
+		vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, tbl)
+
+		module.config.private.loaded_files[file].bufnr = bufnr
+
+		return bufnr
+
+	end,
+
+	--- @param files # array of file paths, if its nil disposes every entry in the
+	--- module.config.private.loaded_files
+	del_buf = function(files)
+		if files then
+			for _, file in pairs(files) do
+				module.config.private.loaded_files[file] = nil
+			end
+		else
+			module.config.private.loaded_files = nil
+		end
+	end,
+
+}
 
 module.public = {
+
+	get_hai = function()
+
+		local buf1 = module.private.get_buf("exported.md")
+		local buf2 = module.private.get_buf("hai.html")
+		print(vim.fs.normalize(
+			"$PWD" .. "/exported.md"
+		))
+		print("     ", buf1, buf2)
+		local tbl = vim.api.nvim_buf_get_lines(buf2, 0, -1, false)
+
+		vim.api.nvim_buf_set_lines(0, 0, 1, false, tbl)
+		print(vim.inspect(
+			tbl
+		))
+
+
+
+		-- local bufnr
+
+		-- local str = Path:new("index.norg"):read()
+
+		-- local tbl = {}
+
+		-- for line in str:gmatch("[^\n]+")
+		-- 	do
+		-- 	tbl[#tbl + 1] = line
+		-- end
+
+		-- vim.api.nvim_buf_set_text(0, 0, 0, 0, 0, tbl)
+
+
+		-- vim.cmd("read index.norg")
+		-- when reading `read index.norg` it will leave an empty line
+		-- at the top, if we leave it there it will cause the exporter
+		-- to mess up the metadata part of the document
+		-- Probably a parser issue ?
+		--
+		-- vim.api.nvim_buf_set_text(0, 0, 0, 1, 0, { "" })
+
+		-- str = module.required["core.export"].export(0, "markdown")
+
+		-- local ano_tbl = {}
+
+		-- for line in str:gmatch("[^\n]+")
+		-- 	do
+		-- 	ano_tbl[#ano_tbl + 1] = line
+		-- end
+
+		-- vim.api.nvim_buf_set_text(0, 0, 0, -1, 0, ano_tbl)
+
+		-- -- local lTree = vim.treesitter.get_parser(0, "norg")
+
+
+		-- -- local root = lTree:()
+
+		-- for dossier, dossier_content in pairs(module.config.private.grouped)
+		-- do
+		-- 	print("----------------------------------------")
+		-- 	print (dossier)
+		-- 	print(vim.inspect(
+		-- 		dossier_content
+		-- 	))
+		-- 	print("----------------------------------------")
+		-- end
+
+	end,
+
+	get_bye = function()
+
+		-- local query = utils.ts_parse_query(
+		-- 	"norg_meta",
+		-- 	[[
+		-- 	(pairs
+		-- 	(key) @k
+		-- 	(#eq? @k "title")
+		-- 	(value) @tit
+		-- 	)
+		-- 	]]
+		-- )
+
+		local LTree = vim.treesitter.get_parser(0, "norg")
+
+		LTree:for_each_child(
+			function(tree)
+
+				if tree:lang() == "norg_meta" then
+					local tstree = tree:parse()[1]
+					local root_node = tstree:root()
+
+					local query = vim.treesitter.query.parse(
+						"norg_meta",
+						[[
+						(pair
+						(key) @k
+						(#eq? @k "title")
+						(value) @tit
+						)
+						]]
+					)
+
+					for idx, node in query:iter_captures(root_node, 0)
+						do
+						print("-----------------------------------------------")
+						print(query.captures[idx])
+						print(vim.inspect(
+							vim.treesitter.get_node_text(node, 0)
+						))
+						print("-----------------------------------------------")
+					end
+
+
+
+
+					-- print(vim.inspect(
+					-- ))
+				else
+					print("-----------------------------------------------")
+					print(tree:lang())
+					print("-----------------------------------------------")
+				end
+
+				-- print(vim.inspect(
+				-- 	tree
+				-- ))
+				-- print("-----------------------------------------------")
+			end
+		)
+
+		-- for id, node in query:iter_captures()
+		-- 	do
+		-- end
+
+	end,
 
 	--- @param dossier_root string # path to the directory
 	--- @return table? # reads the json inside
@@ -308,13 +511,13 @@ module.on_event = function(event)
 
 	if event.type == "core.neorgcmd.events.dossier" then
 		-- print(vim.inspect(event))
-		print(vim.inspect(
-			module.public.get_prev_export_info(vim.loop.cwd())
-		))
+		-- print(vim.inspect(
+		-- 	module.public.get_prev_export_info(vim.loop.cwd())
+		-- ))
+		module.public.get_hai()
 	end
 
 end
-
 
 
 module.events.subscribed = {
