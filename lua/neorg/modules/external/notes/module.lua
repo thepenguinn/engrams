@@ -78,7 +78,7 @@ module.config.private = {
 				metadata = {
 					title = { "ssl", },
 					description = { "something stupid", },
-					authors = { "Daniel" },
+					authors = { "Daniel", "Someone Else" },
 					categories = { "cat", "dog", },
 					created = nil,
 					updated = nil,
@@ -101,30 +101,40 @@ module.config.private = {
 			},
 		},
 
-		["hai"] = {
-			{
-				files = {
-					"hai/mod-1/syllabus.norg",
-					"hai/mod-2/syllabus.norg",
-				},
-			},
-			{
-				files = {
-					"hai/mod-1/notes.norg",
-				},
-			},
-			{
-				files = {
-					"hai/mod-2/notes.norg",
-				},
-			},
-		},
+		-- ["hai"] = {
+		-- 	{
+		-- 		files = {
+		-- 			"hai/mod-1/syllabus.norg",
+		-- 			"hai/mod-2/syllabus.norg",
+		-- 		},
+		-- 	},
+		-- 	{
+		-- 		files = {
+		-- 			"hai/mod-1/notes.norg",
+		-- 		},
+		-- 	},
+		-- 	{
+		-- 		files = {
+		-- 			"hai/mod-2/notes.norg",
+		-- 		},
+		-- 	},
+		-- },
 	},
 
 }
 
 
 module.private = {
+
+	--- @param bufnr_tbl # place to put the bufnr of each files
+	--- @param files # arrray of file paths
+	load_files = function(bufnr_tbl, files)
+
+		for idx, files in ipairs(files) do
+			bufnr_tbl[idx] = module.private.get_buf(files)
+		end
+
+	end,
 
 	--- @param file # path of the file
 	--- @return number? # bufnr of the loaded file
@@ -159,7 +169,7 @@ module.private = {
 
 	--- @param files # array of file paths, if its nil disposes every entry
 	--- in the module.config.private.loaded_files
-	del_buf = function(files)
+	drop_buf = function(files)
 		if files then
 			for _, file in pairs(files) do
 				module.config.private.loaded_files[file] = nil
@@ -212,13 +222,70 @@ module.private = {
 
 module.public = {
 
+	--- the content is everything below the first @document.meta block
+	--- @param bufnr # buffer number of the buffer that we wants to
+	--- extract content from
+	--- @retrun table? # an array of string after the first metadata block
+	get_norg_content = function(bufnr)
+
+		local ltree = vim.treesitter.get_parser(bufnr, "norg")
+
+		local ltree_meta = nil
+
+		ltree:for_each_child(
+			function(tree)
+				if not ltree_meta and tree:lang() == "norg_meta" then
+					ltree_meta = tree
+				end
+			end
+		)
+
+		if not ltree_meta then
+			return nil
+		end
+
+		local region = ltree_meta:included_regions()[1][1]
+
+		return vim.api.nvim_buf_get_lines(bufnr, region[4] + 1, -1, false)
+
+	end,
+
+	--- @param metadata # table containing metadata
+	--- @param meta_fields # an array containing metadata keys to add
+	--- @return array? # an array of strings
+	compile_metadata = function(metadata, meta_fields)
+
+		local out_tbl = {}
+
+		out_tbl[1] = "@document.meta"
+
+		for idx, field in ipairs(meta_fields) do
+
+			if #metadata[field] == 1 then
+				out_tbl[#out_tbl + 1] = field .. ": " .. metadata[field][1]
+			elseif #metadata[field] > 1 then
+				out_tbl[#out_tbl + 1] = field .. ": ["
+				for _, value in ipairs(metadata[field]) do
+					out_tbl[#out_tbl + 1] = "\t" .. value
+				end
+				out_tbl[#out_tbl + 1] = "]"
+			end
+
+		end
+
+		out_tbl[#out_tbl + 1] = "@end"
+
+		return out_tbl
+
+	end,
+
 	--- After filling metadata from the user's config, we need to
 	--- fill the rest of them from the first norg file. If we can't find
 	--- any field we will fill it with the string 'nil'
-	--- @param bufnr # buffer number of the loaded norg file.
-	--- @param dossier_info # table to which we will be appeding meta info
+	--- @param bufnr # buffer number of the loaded norg file to read from
+	--- @param metadata # table to which we will be appeding meta info
 	--- @param meta_fields # array of meta fields as strings
-	fill_missing_meta = function(bufnr, dossier_info, meta_fields)
+	fill_missing_meta = function(bufnr, metadata, meta_fields)
 
 		local ltree = vim.treesitter.get_parser(bufnr, "norg")
 
@@ -233,16 +300,17 @@ module.public = {
 
 		-- if we don't find any metadata, we will simply assign
 		-- { "nil" } to every empty tables having fields from meta_fields
-		-- in dossier_info
+		-- in metadata
 		if not ltree_meta then
 			for _, field in pairs(meta_fields) do
 
-			-- if field is a table and not empty, we will skip it
-			if type(field) == "table" and not vim.tbl_isempty(field) then
+			-- if metadata[field] is a table and not empty, we will skip it
+			if type(metadata[field]) == "table"
+				and not vim.tbl_isempty(metadata[field]) then
 				goto continue
 			end
 
-			dossier_info[field] = { "nil" }
+			metadata[field] = { "nil" }
 
 				::continue::
 			end
@@ -258,8 +326,9 @@ module.public = {
 
 		for _, field in pairs(meta_fields) do
 
-			-- if field is a table and not empty, we will skip it
-			if type(field) == "table" and not vim.tbl_isempty(field) then
+			-- if metadata[field] is a table and not empty, we will skip it
+			if type(metadata[field]) == "table"
+				and not vim.tbl_isempty(metadata[field]) then
 				goto continue
 			end
 
@@ -277,7 +346,7 @@ module.public = {
 				result = { "nil" }
 			end
 
-			dossier_info[field] = result
+			metadata[field] = result
 			result = {}
 
 			::continue::
@@ -287,12 +356,12 @@ module.public = {
 	end,
 
 	--- compiles a buffer from the info in the export_group table
-	--- and returns the bufnr to the that buffer
-	--- @param export_idx # export_id of the export_group
+	--- and returns an array
 	--- @param export_group # table of every export info to generate
-	--- the buffer to export
-	--- @return number? # bufnr of the compiled buffer
-	compile_export_buffer = function(export_id, export_group)
+	--- the compiled norg file
+	--- @return array? # returns an array of strings, each element as
+	--- each line
+	compile_export_group = function(export_group)
 
 		if type(export_group) ~= "table"
 			or type(export_group.files) ~= "table"
@@ -300,31 +369,38 @@ module.public = {
 			return nil
 		end
 
-		local scratch_bufnr = vim.api.nvim_create_buf(false, true)
-		local output_bufnr = vim.api.nvim_create_buf(false, true)
-
-		local meta_bufnr = module.private.get_buf(export_group.files[1])
+		local output_tbl = {}
 
 		module.public.fill_missing_meta(
-			meta_bufnr,
+			export_group.file_bufnrs[1],
 			export_group.metadata,
 			module.config.public.metadata_fields
 		)
 
-		if not export_group.output_path then
-			local dir = vim.fs.dirname(export_group.files[1])
-			local export_file = vim.fs.basename(export_group.files[1])
-			export_file = export_file:gsub("(.*)(%..*)"
-				, "%1-export-" .. export_id .. ".md")
-			print(export_file)
-			export_group.output_path = dir .. "/" .. export_file
+		local tmp_tbl = {}
+
+		tmp_tbl = module.public.compile_metadata(
+			export_group.metadata,
+			module.config.public.metadata_fields
+		)
+
+		for _, i in ipairs(tmp_tbl) do
+			output_tbl[#output_tbl + 1] = i
 		end
 
-		print("-------------------------------")
-		print(vim.inspect(
-			export_group
-		))
-		print("-------------------------------")
+		tmp_tbl = nil
+
+		for _, file_bufnr in ipairs(export_group.file_bufnrs) do
+
+			output_tbl[#output_tbl + 1] = ""
+			tmp_tbl = module.public.get_norg_content(file_bufnr)
+
+			for _, i in ipairs(tmp_tbl) do
+				output_tbl[#output_tbl + 1] = i
+			end
+		end
+
+		return output_tbl
 
 	end,
 
@@ -334,7 +410,8 @@ module.public = {
 	--- it will be in the norg format.
 	compile_dossiers = function(dossier_tree)
 
-		local srch_buf = vim.api.nvim_create_buf(false, true)
+		local compiled
+		local compiled_bufnr
 
 		for _, dossier in pairs(dossier_tree) do
 
@@ -344,15 +421,41 @@ module.public = {
 					export_group.metadata = {}
 				end
 
-				module.public.compile_export_buffer(idx, export_group)
+				if not export_group.output_path then
+					local dir = vim.fs.dirname(export_group.files[1])
+					local export_file = vim.fs.basename(export_group.files[1])
+					export_file = export_file:gsub("(.*)(%..*)",
+						"%1-export-" .. idx .. ".md")
+					export_group.output_path = dir .. "/" .. export_file
+				end
 
-				-- print("--------------------------")
+				-- loading the files into scratch buffers
+				export_group.file_bufnrs = {}
+				module.private.load_files(
+					export_group.file_bufnrs,
+					export_group.files
+				)
+
+				compiled = module.public.compile_export_group(
+					export_group
+				)
+
+				compiled_bufnr = vim.api.nvim_create_buf(false, true)
+
+				vim.api.nvim_buf_set_lines(
+					compiled_bufnr, 0, 1, false, compiled
+				)
+				compiled = nil
+				export_group.compiled_bufnr = compiled_bufnr
+
+				-- print("----------------------------------")
 				-- print(vim.inspect(
-				-- 	export_group
+				-- 	compiled
 				-- ))
-				-- print("--------------------------")
+				-- print("----------------------------------")
 
 			end
+
 		end
 
 
