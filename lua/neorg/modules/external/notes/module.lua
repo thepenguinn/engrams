@@ -20,6 +20,17 @@ module.setup = function()
 end
 
 module.config.public = {
+
+	metadata_fields = {
+		"title",
+		"description",
+		"authors",
+		"categories",
+		"created",
+		"updated",
+		"version",
+	},
+
 	dossiers = {
 		default = {
 			structure = {
@@ -54,6 +65,8 @@ end
 
 module.config.private = {
 
+	compiled_queries = {},
+
 	loaded_files = {},
 
 	grouped = {
@@ -62,50 +75,47 @@ module.config.private = {
 				-- if any of these values are nil then we will try to
 				-- reads it from the first file's meta, if that is also nil,
 				-- it will be the string "nil"
-				title = nil,
-				description = nil,
-				authors = {},
-				categories = {},
-				created = nil,
-				updated = nil,
-				file_name = nil,
+				metadata = {
+					title = { "ssl", },
+					description = { "something stupid", },
+					authors = { "Daniel" },
+					categories = { "cat", "dog", },
+					created = nil,
+					updated = nil,
+				},
+				output_path = "ssl/expt.md",
 				files = {
-					"mod-1/syllabus.norg",
-					"mod-2/syllabus.norg",
+					"ssl/mod-1/syllabus.norg",
+					"ssl/mod-2/syllabus.norg",
 				},
 			},
 			{
-				title = nil,
 				files = {
-					"mod-1/notes.norg",
+					"ssl/mod-1/notes.norg",
 				},
 			},
 			{
-				title = nil,
 				files = {
-					"mod-2/notes.norg",
+					"ssl/mod-2/notes.norg",
 				},
 			},
 		},
 
 		["hai"] = {
 			{
-				title = nil,
 				files = {
-					"mod-1/syllabus.norg",
-					"mod-2/syllabus.norg",
+					"hai/mod-1/syllabus.norg",
+					"hai/mod-2/syllabus.norg",
 				},
 			},
 			{
-				title = nil,
 				files = {
-					"mod-1/notes.norg",
+					"hai/mod-1/notes.norg",
 				},
 			},
 			{
-				title = nil,
 				files = {
-					"mod-2/notes.norg",
+					"hai/mod-2/notes.norg",
 				},
 			},
 		},
@@ -120,8 +130,8 @@ module.private = {
 	--- @return number? # bufnr of the loaded file
 	get_buf = function(file)
 
-		if module.config.private.loaded_files[file].bufnr then
-			return module.config.private.loaded_files[file].bufnr
+		if module.config.private.loaded_files[file] then
+			return module.config.private.loaded_files[file]
 		end
 
 		local file_obj = Path:new(file)
@@ -141,14 +151,14 @@ module.private = {
 
 		vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, tbl)
 
-		module.config.private.loaded_files[file].bufnr = bufnr
+		module.config.private.loaded_files[file] = bufnr
 
 		return bufnr
 
 	end,
 
-	--- @param files # array of file paths, if its nil disposes every entry in the
-	--- module.config.private.loaded_files
+	--- @param files # array of file paths, if its nil disposes every entry
+	--- in the module.config.private.loaded_files
 	del_buf = function(files)
 		if files then
 			for _, file in pairs(files) do
@@ -159,11 +169,213 @@ module.private = {
 		end
 	end,
 
+	--- @param query_str # key for the which we will be querying inside
+	--- document.meta
+	--- @return Query? returns the Query object
+	get_query = function(query_str)
+		if module.config.private.compiled_queries[query_str] then
+			return module.config.private.compiled_queries[query_str]
+		end
+
+		local query = vim.treesitter.query.parse(
+			"norg_meta",
+			[[
+				(pair
+				(key) @_key
+				(#eq? @_key ]] .. query_str .. [[ )
+			(string) @]] .. query_str .. [[
+				)
+				(pair
+				(key) @_key
+				(#eq? @_key ]] .. query_str .. [[ )
+				(array
+			(string) @]] .. query_str .. [[
+				)
+				)
+			]]
+		)
+
+		module.config.private.compiled_queries[query_str] = query
+
+		return query
+
+	end,
+
+	--- @param bufnr # buffer number of the buffer that wants to be parsed
+	--- @return LanguageTree? # read :h LanguageTree for more info about
+	--- the object
+	-- get_parser = function(bufnr)
+	-- 	local ltree = vim.treesitter.
+	-- end,
+
 }
 
 module.public = {
 
-	get_hai = function()
+	--- After filling metadata from the user's config, we need to
+	--- fill the rest of them from the first norg file. If we can't find
+	--- any field we will fill it with the string 'nil'
+	--- @param bufnr # buffer number of the loaded norg file.
+	--- @param dossier_info # table to which we will be appeding meta info
+	--- @param meta_fields # array of meta fields as strings
+	fill_missing_meta = function(bufnr, dossier_info, meta_fields)
+
+		local ltree = vim.treesitter.get_parser(bufnr, "norg")
+
+		local ltree_meta = nil
+		ltree:for_each_child(
+			function(tree)
+				if not ltree_meta and tree:lang() == "norg_meta" then
+					ltree_meta = tree
+				end
+			end
+		)
+
+		-- if we don't find any metadata, we will simply assign
+		-- { "nil" } to every empty tables having fields from meta_fields
+		-- in dossier_info
+		if not ltree_meta then
+			for _, field in pairs(meta_fields) do
+
+			-- if field is a table and not empty, we will skip it
+			if type(field) == "table" and not vim.tbl_isempty(field) then
+				goto continue
+			end
+
+			dossier_info[field] = { "nil" }
+
+				::continue::
+			end
+
+			return nil
+
+		end
+
+		local tstree = ltree_meta:parse()[1]
+		local meta_root = tstree:root()
+		local query
+		local result = {}
+
+		for _, field in pairs(meta_fields) do
+
+			-- if field is a table and not empty, we will skip it
+			if type(field) == "table" and not vim.tbl_isempty(field) then
+				goto continue
+			end
+
+			local query = module.private.get_query(field)
+
+			for idx, node in query:iter_captures(meta_root, bufnr) do
+
+				if query.captures[idx] == field then
+					result[#result + 1] = vim.treesitter.get_node_text(node, bufnr)
+				end
+
+			end
+
+			if vim.tbl_isempty(result) then
+				result = { "nil" }
+			end
+
+			dossier_info[field] = result
+			result = {}
+
+			::continue::
+
+		end
+
+	end,
+
+	--- compiles a buffer from the info in the export_group table
+	--- and returns the bufnr to the that buffer
+	--- @param export_idx # export_id of the export_group
+	--- @param export_group # table of every export info to generate
+	--- the buffer to export
+	--- @return number? # bufnr of the compiled buffer
+	compile_export_buffer = function(export_id, export_group)
+
+		if type(export_group) ~= "table"
+			or type(export_group.files) ~= "table"
+			or vim.tbl_isempty(export_group.files) then
+			return nil
+		end
+
+		local scratch_bufnr = vim.api.nvim_create_buf(false, true)
+		local output_bufnr = vim.api.nvim_create_buf(false, true)
+
+		local meta_bufnr = module.private.get_buf(export_group.files[1])
+
+		module.public.fill_missing_meta(
+			meta_bufnr,
+			export_group.metadata,
+			module.config.public.metadata_fields
+		)
+
+		if not export_group.output_path then
+			local dir = vim.fs.dirname(export_group.files[1])
+			local export_file = vim.fs.basename(export_group.files[1])
+			export_file = export_file:gsub("(.*)(%..*)"
+				, "%1-export-" .. export_id .. ".md")
+			print(export_file)
+			export_group.output_path = dir .. "/" .. export_file
+		end
+
+		print("-------------------------------")
+		print(vim.inspect(
+			export_group
+		))
+		print("-------------------------------")
+
+	end,
+
+	--- @param dossier_tree # a table containing each dossier's info
+	--- @return table? # compiles all the info for each dossier into a
+	--- buffer and attaches it to compiled_buffer at each dossier's table,
+	--- it will be in the norg format.
+	compile_dossiers = function(dossier_tree)
+
+		local srch_buf = vim.api.nvim_create_buf(false, true)
+
+		for _, dossier in pairs(dossier_tree) do
+
+			for idx, export_group in ipairs(dossier) do
+
+				if not export_group.metadata then
+					export_group.metadata = {}
+				end
+
+				module.public.compile_export_buffer(idx, export_group)
+
+				-- print("--------------------------")
+				-- print(vim.inspect(
+				-- 	export_group
+				-- ))
+				-- print("--------------------------")
+
+			end
+		end
+
+
+
+	end,
+
+	--- @param dossier_root string # path to the directory
+	--- @return table? # reads the json inside
+	--- dossier_root/exported/export_info.json and returns it as a table if it
+	--- doesn't exist returns nil
+	get_prev_export_info = function(dossier_root)
+		local obj = Path:new(dossier_root .. "/exported/export_info.json")
+
+		if not obj:is_file() then
+			return nil
+		end
+
+		return vim.json.decode(
+			obj:read()
+		)
+	end,
+
+	foooo = function()
 
 		local buf1 = module.private.get_buf("exported.md")
 		local buf2 = module.private.get_buf("hai.html")
@@ -297,23 +509,7 @@ module.public = {
 
 	end,
 
-	--- @param dossier_root string # path to the directory
-	--- @return table? # reads the json inside
-	--- dossier_root/exported/export_info.json and returns it as a table if it
-	--- doesn't exist returns nil
-	get_prev_export_info = function(dossier_root)
-		local obj = Path:new(dossier_root .. "/exported/export_info.json")
-
-		if not obj:is_file() then
-			return nil
-		end
-
-		return vim.json.decode(
-			obj:read()
-		)
-	end,
-
-	gen_markdown = function()
+	gen_markdwn = function()
 
 
 		local file_name = "exported.md"
@@ -514,7 +710,25 @@ module.on_event = function(event)
 		-- print(vim.inspect(
 		-- 	module.public.get_prev_export_info(vim.loop.cwd())
 		-- ))
-		module.public.get_hai()
+
+		module.public.compile_dossiers(module.config.private.grouped)
+		-- local bufnr1 = vim.api.nvim_create_buf(false, true)
+		-- local hai = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+		-- vim.api.nvim_buf_set_lines(bufnr1, 0, 1, false, hai)
+		-- local tbl = {}
+
+		-- module.public.fill_missing_meta(bufnr1, tbl, module.config.public.metadata_fields)
+
+		-- tbl = {}
+		-- local bufnr2 = vim.api.nvim_create_buf(false, true)
+		-- vim.api.nvim_buf_set_lines(bufnr2, 0, 1, false, hai)
+
+		-- module.public.fill_missing_meta(bufnr2, tbl, module.config.public.metadata_fields)
+
+		-- print(vim.inspect(
+		-- 	tbl
+		-- ))
+
 	end
 
 end
