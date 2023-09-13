@@ -32,7 +32,7 @@ module.config.public = {
 		"version",
 	},
 
-	dossiers = {
+	engrams = {
 		default = {
 			structure = {
 				["mod-<%d>"] = {
@@ -50,11 +50,11 @@ module.config.public = {
 module.load = function ()
 	module.required["core.neorgcmd"].add_commands_from_table({
 
-		dossier = {
+		engram = {
 
 			args = 0,
 			-- condition = "norg",
-			name = "dossier"
+			name = "engram"
 
 		},
 
@@ -84,7 +84,7 @@ module.config.private = {
 					created = nil,
 					updated = nil,
 				},
-				dossier_root = nil,
+				engram_root = nil,
 				output_path = "ssl/expt.md",
 				files = {
 					"ssl/mod-1/syllabus.norg",
@@ -133,12 +133,12 @@ module.config.private = {
 module.private = {
 
 
-	--- @param file # the file path of which the dossier directory
+	--- @param file # the file path of which the engram directory
 	--- should be found
-	--- @return string? # dossier_root directory
+	--- @return string? # engram_root directory
 	--- TODO: Implement this properly, currently this is only
 	--- for testing
-	get_dossier_root = function(file)
+	get_engram_root = function(file)
 
 		return file:match("^%a*")
 
@@ -261,8 +261,8 @@ module.public = {
 		or vim.fs.normalize(
 			"$HOME" .. "/.fonts/FiraCode.ttf"
 		)
-		local export_dir = export_group.dossier_root
-		and export_group.dossier_root .. "/export" or "." .. "/export"
+		local export_dir = export_group.engram_root
+		and export_group.engram_root .. "/export" or "." .. "/export"
 		local title = export_group.metadata.title[1] or "nil"
 		local subtitle = export_group.metadata.categories[1] or "nil"
 
@@ -318,13 +318,13 @@ module.public = {
 
 	end,
 
-	jstart = function(dossier_root)
+	jstart = function(engram_root)
 
 		-- vim.loop.fs_mkdir("freek", 1770)
 
-		-- module.private.get_dossier_root()
+		-- module.private.get_engram_root()
 
-		module.public.compile_dossiers(dossier_root)
+		module.public.compile_engrams(engram_root)
 
 	end,
 
@@ -511,18 +511,18 @@ module.public = {
 
 	end,
 
-	--- @param dossier_tree # a table containing each dossier's info
-	--- @return table? # compiles all the info for each dossier into a
-	--- buffer and attaches it to compiled_buffer at each dossier's table,
+	--- @param engram_tree # a table containing each engram's info
+	--- @return table? # compiles all the info for each engram into a
+	--- buffer and attaches it to compiled_buffer at each engram's table,
 	--- it will be in the norg format.
-	compile_dossiers = function(dossier_tree)
+	compile_engrams = function(engram_tree)
 
 		local compiled
 		local compiled_bufnr
 
-		for _, dossier in pairs(dossier_tree) do
+		for _, engram in pairs(engram_tree) do
 
-			for idx, export_group in ipairs(dossier) do
+			for idx, export_group in ipairs(engram) do
 
 				if not export_group.metadata then
 					export_group.metadata = {}
@@ -557,8 +557,8 @@ module.public = {
 
 				-- TESTING --
 
-				if not export_group.dossier_root then
-					export_group.dossier_root = module.private.get_dossier_root(
+				if not export_group.engram_root then
+					export_group.engram_root = module.private.get_engram_root(
 						export_group.files[1]
 					)
 				end
@@ -585,12 +585,12 @@ module.public = {
 
 	end,
 
-	--- @param dossier_root string # path to the directory
+	--- @param engram_root string # path to the directory
 	--- @return table? # reads the json inside
-	--- dossier_root/exported/export_info.json and returns it as a table if it
+	--- engram_root/exported/export_info.json and returns it as a table if it
 	--- doesn't exist returns nil
-	get_prev_export_info = function(dossier_root)
-		local obj = Path:new(dossier_root .. "/exported/export_info.json")
+	get_prev_export_info = function(engram_root)
+		local obj = Path:new(engram_root .. "/exported/export_info.json")
 
 		if not obj:is_file() then
 			return nil
@@ -656,12 +656,12 @@ module.public = {
 
 		-- -- local root = lTree:()
 
-		-- for dossier, dossier_content in pairs(module.config.private.grouped)
+		-- for engram, engram_content in pairs(module.config.private.grouped)
 		-- do
 		-- 	print("----------------------------------------")
-		-- 	print (dossier)
+		-- 	print (engram)
 		-- 	print(vim.inspect(
-		-- 		dossier_content
+		-- 		engram_content
 		-- 	))
 		-- 	print("----------------------------------------")
 		-- end
@@ -829,10 +829,10 @@ module.public = {
 
 	ooo = function()
 
-		for key, val in pairs(module.config.public.dossiers.structure)
+		for key, val in pairs(module.config.public.engrams.structure)
 			do
 			print(key)
-			print(vim.inspect(module.config.public.dossiers.structure[key]))
+			print(vim.inspect(module.config.public.engrams.structure[key]))
 		end
 
 
@@ -931,13 +931,13 @@ module.public = {
 
 module.on_event = function(event)
 
-	if event.type == "core.neorgcmd.events.dossier" then
+	if event.type == "core.neorgcmd.events.engram" then
 		-- print(vim.inspect(event))
 		-- print(vim.inspect(
 		-- 	module.public.get_prev_export_info(vim.loop.cwd())
 		-- ))
 
-		-- module.public.compile_dossiers(module.config.private.grouped)
+		-- module.public.compile_engrams(module.config.private.grouped)
 
 		module.public.jstart(module.config.private.grouped)
 
@@ -965,7 +965,7 @@ end
 
 module.events.subscribed = {
     ["core.neorgcmd"] = {
-        ["dossier"] = true,
+        ["engram"] = true,
     },
 }
 
