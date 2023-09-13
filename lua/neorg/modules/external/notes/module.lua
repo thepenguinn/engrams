@@ -1,5 +1,6 @@
 local neorg = require('neorg.core')
 local Path = require('plenary.path')
+local Async = require('plenary.async')
 
 local module = neorg.modules.create('external.notes')
 local utils = neorg.utils
@@ -83,10 +84,15 @@ module.config.private = {
 					created = nil,
 					updated = nil,
 				},
+				dossier_root = nil,
 				output_path = "ssl/expt.md",
 				files = {
 					"ssl/mod-1/syllabus.norg",
 					"ssl/mod-2/syllabus.norg",
+				},
+				cover_img = {
+					font = nil,
+					path = nil,
 				},
 			},
 			{
@@ -125,6 +131,18 @@ module.config.private = {
 
 
 module.private = {
+
+
+	--- @param file # the file path of which the dossier directory
+	--- should be found
+	--- @return string? # dossier_root directory
+	--- TODO: Implement this properly, currently this is only
+	--- for testing
+	get_dossier_root = function(file)
+
+		return file:match("^%a*")
+
+	end,
 
 	--- @param bufnr_tbl # place to put the bufnr of each files
 	--- @param files # arrray of file paths
@@ -221,6 +239,95 @@ module.private = {
 }
 
 module.public = {
+
+	--- @param export_group #
+	export_to_epub = function()
+
+		-- vim.fn.jobstart( {
+
+
+		-- 	},
+		-- )
+
+	end,
+
+
+	--- @param export_group # a table with every info to compile the norg
+	--- buffer
+	--- @return string # the path to the compiled cover image
+	compile_cover_img = function(export_group)
+
+		local font = export_group.cover_img.font
+		or vim.fs.normalize(
+			"$HOME" .. "/.fonts/FiraCode.ttf"
+		)
+		local export_dir = export_group.dossier_root
+		and export_group.dossier_root .. "/export" or "." .. "/export"
+		local title = export_group.metadata.title[1] or "nil"
+		local subtitle = export_group.metadata.categories[1] or "nil"
+
+		local cover_dir = export_dir .. "/cover_dir"
+		local background_path = cover_dir .. "/background.png"
+		local title_path  = cover_dir .. "/title.png"
+		local subtitle_path  = cover_dir .. "/subtitle.png"
+		local tmp_path  = cover_dir .. "/tmp.png"
+		local output_path = cover_dir .. "/output.png"
+
+		-- TODO: Figure out a better way to do this, that
+		-- doesn't requires the user setting up the script
+		local img_gen_script = vim.fs.normalize(
+			"$HOME" .. "/.local/bin/gen-cover-img"
+		)
+
+		-- Contents of gen-cover-img --
+		--[[
+
+		#!/data/data/com.termux/files/usr/bin/bash
+
+		# 0             1    2     3        4          5             6               7        8
+		# gen-cover-img font title subtitle title_path subtitle_path background_path tmp_path output_path
+		# make sure to mkdir the parent directories of the paths
+
+		convert -background none -fill black -font "${1}" -pointsize 65 -size 600x810 -gravity north caption:"${2}" "${4}"
+		convert -background none -fill black -font "${1}" -pointsize 60 -size 600x810 -gravity south caption:"${3}" "${5}"
+		convert -size 800x1080 xc:white "${6}"
+		composite -gravity center "${4}" "${6}" "${7}"
+		composite -gravity center "${5}" "${7}" "${8}"
+		--]]
+
+		vim.loop.fs_mkdir(export_dir, 1700)
+		vim.loop.fs_mkdir(cover_dir, 1700)
+
+		title = "Hello This is a Test RUN"
+		subtitle = "All about Cats and Dogs"
+
+
+		vim.fn.jobstart( {
+			img_gen_script, font, title, subtitle, title_path, subtitle_path,
+			background_path, tmp_path, output_path
+			}, {
+
+				on_exit = function()
+					export_group.cover_img.path = output_path
+					print("Compiled image " .. output_path)
+				end,
+			}
+		)
+
+
+
+	end,
+
+	jstart = function(dossier_root)
+
+		-- vim.loop.fs_mkdir("freek", 1770)
+
+		-- module.private.get_dossier_root()
+
+		module.public.compile_dossiers(dossier_root)
+
+	end,
+
 
 	--- the content is everything below the first @document.meta block
 	--- @param bufnr # buffer number of the buffer that we wants to
@@ -448,11 +555,27 @@ module.public = {
 				compiled = nil
 				export_group.compiled_bufnr = compiled_bufnr
 
-				-- print("----------------------------------")
-				-- print(vim.inspect(
-				-- 	compiled
-				-- ))
-				-- print("----------------------------------")
+				-- TESTING --
+
+				if not export_group.dossier_root then
+					export_group.dossier_root = module.private.get_dossier_root(
+						export_group.files[1]
+					)
+				end
+
+				if not export_group.cover_img.font then
+					export_group.cover_img.font = vim.fs.normalize(
+						"$HOME" .. "/.fonts/FiraCode.ttf"
+					)
+				end
+
+				if not export_group.cover_img.path then
+					module.public.compile_cover_img(export_group)
+				end
+
+				if true then
+					return false
+				end
 
 			end
 
@@ -814,7 +937,10 @@ module.on_event = function(event)
 		-- 	module.public.get_prev_export_info(vim.loop.cwd())
 		-- ))
 
-		module.public.compile_dossiers(module.config.private.grouped)
+		-- module.public.compile_dossiers(module.config.private.grouped)
+
+		module.public.jstart(module.config.private.grouped)
+
 		-- local bufnr1 = vim.api.nvim_create_buf(false, true)
 		-- local hai = vim.api.nvim_buf_get_lines(0, 0, -1, false)
 		-- vim.api.nvim_buf_set_lines(bufnr1, 0, 1, false, hai)
