@@ -33,6 +33,67 @@ module.config.public = {
 	},
 
 	engrams = {
+		["book-binding"] = {
+			templete = "book-binding-templete",
+		},
+		["some-other-name"] = {
+			templete = "book-binding-templete",
+		},
+	},
+
+	engram_templetes = {
+		["some other templete"] = {
+			dir_structure = {
+				{
+					repeatable = true,
+					parent = "dino-<ephmid>",
+					{ "dino", },
+					{
+						repeatable = true,
+						parent = "fossil-site-<ephmid>",
+						"site-history",
+						"site-geography",
+					},
+				},
+			},
+			export_grouping = {
+				{
+					grule = "forall",
+					format = { "pdf", "html", },
+
+				},
+			},
+		},
+		["book-binding-templete"] = {
+			dir_structure = {
+				{
+					repeatable = true,
+					parent = "form-<ephmid>",
+					{ "history", "techniques", "projects", },
+				},
+			},
+			export_grouping = {
+				{
+					grule = "forall:<all>",
+					format = { "pdf", },
+					{
+						parent = "form-<ephmid>",
+						"history",
+					},
+				},
+				{
+					grule = "foreach:<all>",
+					format = { "pdf" },
+					{
+						parent = "form-<ephmid>",
+						"techniques",
+					},
+				},
+			},
+		},
+	},
+
+	engram_config = {
 		default = {
 			structure = {
 				["mod-<%d>"] = {
@@ -42,6 +103,18 @@ module.config.public = {
 			},
 			grouping = {
 				[1] = { "<all>" }
+			},
+		},
+		["book-binding"] = {
+			structure = {
+				["form-<%d>"] = {
+					"history",
+					"techniques",
+					"projects",
+				},
+			},
+			grouping = {
+
 			},
 		},
 	},
@@ -69,6 +142,38 @@ module.config.private = {
 	compiled_queries = {},
 
 	loaded_files = {},
+
+	-- export_groups = {
+	-- 	{
+	-- 		metadata = {
+	-- 			title = { "Book Binding Forms and Their Histories" },
+	-- 			description = { "Notes About Book Binding Forms and Their Histories", },
+	-- 			authors = { "Daniel", },
+	-- 			categories = { "book-binding", },
+	-- 			created = { "date", },
+	-- 			updated = { "date", },
+	-- 		},
+	-- 		files = {
+	-- 			{ "lmodtime", "book-binding/form-1/history.norg", }
+	-- 			{ "lmodtime", "book-binding/form-2/history.norg", }
+	-- 			{ "lmodtime", "book-binding/form-3/history.norg", }
+	-- 		},
+	-- 		cover_image = {
+	-- 			directory = { "book-binding", },
+	-- 			title = { "Book Binding Forms and Their Histories", },
+	-- 			subtitle = { "Notes About Book Binding Forms and Their Histories", },
+	-- 			font = { "$HOME/.fonts/FiraCode.ttf", },
+	-- 		},
+	-- 		output_info = {
+	-- 			format = { "pdf", },
+	-- 			file = { "Book Binding Forms and Their Histories", },
+	-- 			directory = { "book-binding", },
+	-- 		},
+	-- 	},
+	-- 	---
+	-- 	-- many more tables just like above
+	-- 	---
+	-- },
 
 	grouped = {
 		["ssl"] = {
@@ -240,11 +345,17 @@ module.private = {
 
 module.public = {
 
+	--- MAKING EXPORT_GROUPS ---
+
+
+
+	----------------------------
+
 	--- @param export_group #
 	export_to_epub = function()
 
 		-- vim.fn.jobstart( {
-
+		print("wip")
 
 		-- 	},
 		-- )
@@ -295,12 +406,9 @@ module.public = {
 		composite -gravity center "${5}" "${7}" "${8}"
 		--]]
 
+
 		vim.loop.fs_mkdir(export_dir, 1700)
 		vim.loop.fs_mkdir(cover_dir, 1700)
-
-		title = "Hello This is a Test RUN"
-		subtitle = "All about Cats and Dogs"
-
 
 		vim.fn.jobstart( {
 			img_gen_script, font, title, subtitle, title_path, subtitle_path,
@@ -315,7 +423,6 @@ module.public = {
 		)
 
 
-
 	end,
 
 	jstart = function(engram_root)
@@ -324,7 +431,8 @@ module.public = {
 
 		-- module.private.get_engram_root()
 
-		module.public.compile_engrams(engram_root)
+		print(module.config.public.lol)
+		-- module.public.compile_engrams(engram_root)
 
 	end,
 
@@ -556,12 +664,6 @@ module.public = {
 				export_group.compiled_bufnr = compiled_bufnr
 
 				-- TESTING --
-
-				if not export_group.engram_root then
-					export_group.engram_root = module.private.get_engram_root(
-						export_group.files[1]
-					)
-				end
 
 				if not export_group.cover_img.font then
 					export_group.cover_img.font = vim.fs.normalize(

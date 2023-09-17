@@ -1,0 +1,360 @@
+@document.meta
+title: SPEC
+description: Specification for the Engrams
+authors: Daniel
+categories: [
+	spec
+]
+created: 2023-09-14
+updated: 2023-09-17
+version: 1.1.1
+@end
+
+* Engrams
+
+** What is an Engram ?
+
+   $ Engram
+   a hypothetical permanent change in the brain accounting for the existence of
+   memory; a memory trace.
+
+   An *Engram* can be a set of files which are related to one another in some
+   sense. They can be an anecdote of something, or notes on something. ...yes,
+   they are inspired from
+   [Engrams in Ark Survial Evolved]{https://ark.fandom.com/wiki/Engrams}
+
+   - Every *Engrams* are situated at one of the workspace directory of neorg.
+   - The *Engrams* are made up of *Ephemeron* or *Ephemera*.
+   - Each *Engram* can be exported to different formats (epub, pdf, etc,...).
+   - Each *Engram* can be divided into furthur /export groups/ which has its own
+	 metadata, norg files, cover image, etc... for exporting.
+   - The user will be able to define the dirctory structure of each *Engram*.
+   - And also, how to group the *Engram* data into different /export groups/.
+   - The user will be able to configure a generic directory structure and export
+	 grouping for a generic *Engram*.
+   - The user will be able to define specilized *Engrams*, and its directory
+	 structure and export grouping.
+
+** What is a Ephemeron ?
+
+   $ Ephemeron
+
+   things that exist or are used or enjoyed for only a short time. (plural)
+   ephemera.
+
+   Ephemera are the building blocks of an Engram. Yes, temporary Ephemera make
+   up a permanent Engram, just like dead things make up living things. A
+   Ephemeron can be a group of files and directories. Ephemeron can be
+   repeatable or non repeatable. Each ephemeron can also be made up with other
+   ephemera.
+
+** Automatically create the Engram directory form the user input
+** Edit the Engram Templete from Neovim
+** Jump between each Ephemera and dynamically create repeatable Ephemera
+** Add Exporting Functionality
+
+   Split the exporting functionality into two seperate parts. One which takes
+   care of the actual exporting from a *export_groups* table and the one which
+   creates the *export_groups* table from the user config and the engram's
+   current directory structure.
+
+*** Creating the *export_groups* table
+
+**** Requirements for an export_groups table.
+
+	 - Files to be included.
+	 - Output file name.
+	 - Output directory.
+	 - Metadata to be included in the output
+	 - Cover image
+	 -- Title
+	 --- It will be title of the final norg file
+	 -- Subtitle
+	 --- It will be categories
+	 - Path to push to kindle.
+
+**** Layout of table in Lua
+
+	 @code lua
+  export_groups = {
+	  {
+		  metadata = {
+			  title = { "Book Binding Forms and Their Histories" },
+			  description = { "Notes About Book Binding Forms and Their Histories", },
+			  authors = { "Daniel", },
+			  categories = { "book-binding", },
+			  created = { "date", },
+			  updated = { "date", },
+		  },
+		  files = {
+			  { "lmodtime", "book-binding/form-1/history.norg", }
+			  { "lmodtime", "book-binding/form-2/history.norg", }
+			  { "lmodtime", "book-binding/form-3/history.norg", }
+		  },
+		  cover_image = {
+			  directory = { "book-binding", },
+			  title = { "Book Binding Forms and Their Histories", },
+			  subtitle = { "Notes About Book Binding Forms and Their Histories", },
+			  font = { "$HOME/.fonts/FiraCode.ttf", },
+		  },
+		  output_info = {
+			  format = { "pdf", },
+			  file = { "Book Binding Forms and Their Histories", },
+			  directory = { "book-binding", },
+		  },
+	  },
+
+	  ---
+	  -- many more tables just like above
+	  ---
+  }
+	 @end
+
+**** ( ) Things to figure out. [0/4]
+
+	 - ( ) Where to put the temporary files generated ?
+	 - ( ) How and where to keep the export information ?
+	 -- ( ) So that we only need to process the files if they are modified again.
+	 -- ( ) And how we are going to store that information ?
+	 -- ( ) probably, we will use json to store the previous export info.
+
+*** Creating the exports from *export_groups* table
+
+** An Example
+
+*** Introduction
+
+	An example for an Engram, is notes on something. Lets imagine we are
+	learning about *Book Binding*. In book binding we will have different forms
+	of book bindings. Like Coptic binding, Criss cross binding, etc... And each
+	of these bindings will its own history, techniques used, note on projects
+	you've done, etc... So the directory structure for this Engram might look
+	like this.
+
+	@tree
+	book-binding
+	+-- form-1
+	|   +-- history.norg
+	|   +-- index.norg
+	|   +-- projects.norg
+	|   +-- techniques.norg
+	+-- form-2
+	|   +-- history.norg
+	|   +-- index.norg
+	|   +-- projects.norg
+	|   +-- techniques.norg
+	+-- form-3
+	|   +-- history.norg
+	|   +-- index.norg
+	|   +-- projects.norg
+	|   +-- techniques.norg
+	+-- index.norg
+	@end
+
+*** Specifying engram_templete
+
+	As you can see each form is a repeatable unit. (form-1, form-2, etc,..).
+	These are Ephemera, Like wise each engram is made up of these repeatable
+	units, which is an engram. So how would you specify an engram.
+
+	@code lua
+ ["external.engram"] = {
+	 config = {
+		 engram_templete = {
+			 ["book-binding-templete"] = {
+				 dir_structure = {
+					 {
+						 repeatable = true,
+						 parent = "form-<ephmid>",
+						 {
+							 "history", "techniques", "projects",
+						 },
+					 },
+				 },
+			 },
+		 },
+	 },
+ },
+	@end
+
+	This is how you define an engram templete, then you can use the templete for
+	any engrams, like this.
+
+	@code lua
+ ["external.engram"] = {
+	 config = {
+		 engrams = {
+			 ["book-binding"] = {
+				 templete = "book-binding-templete",
+			 },
+			 ["some-other-name"] = {
+				 templete = "book-binding-templete",
+			 },
+		 },
+		 engram_templete = {
+			 ["book-binding-templete"] = {
+				 dir_structure = {
+					 {
+						 repeatable = true,
+						 parent = "form-<ephmid>",
+						 { "history", "techniques", "projects", },
+					 },
+				 },
+			 },
+		 },
+	 },
+ }
+	@end
+
+	The <ephmid> stands for ephemera id, the first emphemera of this templete
+	will have a ephmid of 1 (form-1). If the <ephmid> is missing, then we will
+	always add the ephmid to the end for unique directory name.
+	`some-other-name` will also use this book-binding-templete.
+
+
+*** Exporting
+
+	Engrams can be exported to different formats (epubs, pdf, etc,..). And the
+	same engram can be exported differently. We can group files in an engram
+	into different export_grouping. The contents of the grouped files are
+	compiled into a larger norg buffer in the index order. Then it is compiled
+	into the corresponding format. In the previous example, let's say we want
+	all the histories of the all of the forms in a single pdf and each
+	technique should be in a seperate pdf. We can specify that inside the
+	engram_templete as a table export_grouping.
+
+	@code lua
+ engram_templete = {
+	 ["book-binding-templete"] = {
+		 dir_structure = {
+			 {
+				 repeatable = true,
+				 parent = "form-<ephmid>",
+				 { "history", "techniques", "projects", },
+			 },
+		 },
+		 export_grouping = {
+			 {
+				 grule = "forall:<all>",
+				 format = { "pdf" },
+				 {
+					 parent = "form-<ephmid>",
+					 "history",
+				 },
+			 },
+			 {
+				 grule = "foreach:<all>",
+				 format = { "pdf" },
+				 {
+					 parent = "form-<ephmid>",
+					 "techniques",
+				 },
+			 },
+		 },
+	 },
+ },
+	@end
+
+	export_grouping is a table of indexed table. Each table has a grule
+	(grouping rule). It defines how to group files. It can be one of these
+	strings.
+
+	- foreach
+	- forall
+
+	grule will only take effect when the ephemera is a repeatable one.
+	Other wise, its ignored.
+
+
+	`foreach` will make a different export for each of the ephmid. `forall` will
+	take all the ephmids specified into a single export.
+
+	`foreach` and `forall` will take a range of ephmids after a `:`
+
+	@code lua
+ grule = "foreach:<1-4>"
+	@end
+
+	Or we can use <all>, for all the unit ids present in the engram directory.
+	<1-3,7,8-12> will specifies 1, 2, 3, 7, 8, 9, 10, 11, 12 in the order.
+
+	If no range is specified, ie, just `foreach`, we will look in each of the
+	sub-tables for a range. If we don't find one `foreach` will act as
+	`foreach:<all>`. `forall` also act the same. If we find a range in the
+	sub-table, we will use that range for that specific sub-table.
+
+	@code lua
+ export_grouping = {
+	 {
+		 grule = "forall",
+		 format = { "pdf" },
+		 {
+			 parent = "form-<uid>:<1-4>",
+			 "history",
+		 },
+	 },
+ },
+	@end
+
+	Let's say we also want to keep notes about the tools used in each form,
+	but we don't want to keep it inside the forms-<uid> directory for some reason.
+	We can create another directory called `tools-<uid>` for the tools used.
+	Now each unit has two directories a `form-<uid>` and `tools-<uid>`.
+	And the `tools-<uid>` has two files named `history` for the history of the
+	tool and a
+
+	This is how we specify this.
+
+
+	@code lua
+ engram_templete = {
+	 ["book-binding"] = {
+		 dir_structure = {
+			 {
+				 repeatable = true,
+				 parent = "form-<ephmid>",
+				 { "history", "techniques", "projects", },
+			 },
+		 },
+		 export_grouping = {
+			 {
+				 grule = "forall:<all>",
+				 format = { "pdf" },
+				 {
+					 parent = "form-<uid>",
+					 "history",
+				 },
+			 },
+			 {
+				 grule = "foreach:<all>",
+				 format = { "pdf" },
+				 {
+					 parent = "form-<uid>",
+					 "techniques",
+				 },
+			 },
+		 },
+	 },
+ },
+	@end
+
+
+
+
+
+*  Implementation
+
+   The implementation should suffice these objectives.
+
+   - It is an external module for [Neorg]{https://github.com/nvim-neorg/neorg}.
+   - The funcitions should be resuable by other plugins or modules.
+   - So the public functions should be implemented in a way that they take some
+	 input and produces some input.
+   - Module's workings can be divided into these sub modules.
+   -- Generate the engram directories and all other automatable things should
+	  be automated. If it is automatable, we're automating it.
+   -- Edit the engram templete dynamically from within Neovim.
+   --- So that, creating engram templete's directory structure and
+	   export groupings becomes interactive.
+   -- Jump between the parent and child ephemera, seemlessly.
+   -- Interactively generate repeatable ephemera.
