@@ -425,13 +425,45 @@ module.public = {
 
 	end,
 
+	show_ui = function()
+
+		-- create a buffer
+		local buffer = module.required["core.ui"].create_split("some text")
+
+		local selection = module.required["core.ui"].begin_selection(buffer)
+
+		selection:flag("C", "<-- Click Here !", { function()
+			print("You just clicked me!!")
+			end, delimiter = " --- "})
+			:listener(
+				"destroy",
+				{ "q" },
+				function (self)
+					self:destroy()
+			end)
+		:listener(
+			"something else",
+			{ "C" },
+			function(self)
+				self:push_page()
+				print("You just clicked me!!")
+			end
+		)
+
+		-- start the selection window
+
+
+
+	end,
+
 	jstart = function(engram_root)
 
 		-- vim.loop.fs_mkdir("freek", 1770)
 
 		-- module.private.get_engram_root()
 
-		print(module.config.public.lol)
+		module.public.show_ui()
+		-- print(module.config.public.lol)
 		-- module.public.compile_engrams(engram_root)
 
 	end,
